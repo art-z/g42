@@ -64,7 +64,7 @@ services:
       - api2
       - api3
     ports:
-      - "80:80"
+      - "4321:80"
     restart: unless-stopped
 
 volumes:
