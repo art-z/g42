@@ -1,0 +1,71 @@
+version: "3.9"
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql://guss:guss@db:5432/guss?schema=public
+  ROUND_DURATION: "60"
+  COOLDOWN_DURATION: "30"
+  JWT_SECRET: "dev_secret_at_least_32_chars_change_me"
+  PORT: "3000"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: guss-db
+    environment:
+      POSTGRES_USER: guss
+      POSTGRES_PASSWORD: guss
+      POSTGRES_DB: guss
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guss -d guss"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: ./api
+    container_name: guss-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *api-env
+    # миграции: ["npx","prisma","migrate","deploy"]
+    # только схема: ["npx","prisma","db","push"]
+    command: ["npx","prisma","db","push"]
+    restart: "no"
+
+  # Три инстанса API
+  api1: &api
+    build: ./api
+    container_name: guss-api-1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: *api-env
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  api2:
+    <<: *api
+    container_name: guss-api-2
+
+  api3:
+    <<: *api
+    container_name: guss-api-3
+
+  web:
+    build: ./web
+    container_name: guss-web
+    depends_on:
+      - api1
+      - api2
+      - api3
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  dbdata:
